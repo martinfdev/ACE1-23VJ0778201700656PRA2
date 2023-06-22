@@ -4,22 +4,27 @@
 
 ;segmento de datos
 .data
-    usac                db "Universidad de San Carlos de Guatemala", 0A, "$"
-    facultad            db "Facultad de Ingenieria", 0A, "$" 
-    vacaciones          db "Escuela de Vacaciones", 0A, "$"
-    curso               db "Arquitectura de Computadoras y Ensambladores 1", 0A, "$"
-    nombre              db "Pedro Martin Francisco", 0A, "$"
-    carne               db "201700656", 0A, "$"
-    salto               db 0A, "$" ;salto a siguente linea
-    opciones_m          db "=======OPCIONES=======", 0A, "$"
-    productos_m         db "(p) Productos", 0A, "$"
-    ingreso_prod_m      db "(i) Ingresar Productos", 0A, "$"
-    eliminar_prod_m     db "(e) Eliminar Productos", 0A, "$"
-    ver_prod_m          db "(b) Ver Productos", 0A, "$"
-    ventas_m            db "(v) Ventas", 0A, "$"
-    herramientas_m      db "(h) Herramientas", 0A, "$"
-    salir_m             db "(s) Salir", 0A, "$"
-    promt_m             db "Selecciones una opcion: $"
+    usac                DB "Universidad de San Carlos de Guatemala", 0A, "$"
+    facultad            DB "Facultad de Ingenieria", 0A, "$" 
+    vacaciones          DB "Escuela de Vacaciones", 0A, "$"
+    curso               DB "Arquitectura de Computadoras y Ensambladores 1", 0A, "$"
+    nombre              DB "Pedro Martin Francisco", 0A, "$"
+    carne               DB "201700656", 0A, "$"
+    salto               DB 0A, "$" ;salto a siguente linea
+    opciones_m          DB "=======OPCIONES=======", 0A, "$"
+    productos_m         DB "(p) Productos", 0A, "$"
+    ingreso_prod_m      DB "(i) Ingresar Productos", 0A, "$"
+    eliminar_prod_m     DB "(e) Eliminar Productos", 0A, "$"
+    ver_prod_m          DB "(b) Ver Productos", 0A, "$"
+    ventas_m            DB "(v) Ventas", 0A, "$"
+    herramientas_m      DB "(h) Herramientas", 0A, "$"
+    salir_m             DB "(s) Salir", 0A, "$"
+    promt_m             DB "Seleccione una opcion: $"
+    msg2                DB "Opcion incorrecto, intenta de nuevo!", 0A, "$"
+    file_acces          DB "PRA2.CNF"
+    handle_file         DW ?
+    buffer_entrada      DB 20, 00
+                        DB 100h DUP(?)
 
 
 ;segmento de codigo
@@ -48,6 +53,14 @@ inicio:
     mov DX, offset carne
     mov AH, 09
     int 21
+
+acceso_sistema:
+    ;abrir archivo
+    mov DX, offset file_acces
+    mov AH, 3D
+    mov AL, 00 ;archivo de solo lectura
+    int 21
+
 
 menu_loop:
     ;salto antes de imprimir
@@ -106,10 +119,37 @@ menu_loop:
     mov AH, 07
     int 21
 
-    cmp AL, 070 ;a
-    cmp AL, 
+    cmp AL, 070 ;p
+    ;je teclado_correcto
+    cmp AL, 069 ;i
+    ;je teclado_correcto
+    cmp AL, 065 ;e
+    ;je teclado_correcto
+    cmp AL, 062 ;b
+    ;je teclado_correcto
+    cmp AL, 076 ;v
+    ;je teclado_correcto
+    cmp AL, 068 ;h
+    ;je teclado_correcto
+    cmp AL, 073 ;s
     je fin
+    jmp opcion_incorrecta
+
+opcion_incorrecta:
+    ;salto
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+    ;impresion de mensaje de error
+    mov DX, offset msg2
+    mov AH, 09
+    int 21
     jmp menu_loop
+
+
+
+
+
 
 
 fin:
