@@ -23,11 +23,13 @@
     msg2                        DB "Opcion incorrecto, intenta de nuevo!", 0A, "$"
     file_acces                  DB "PRA2.CNF",00
     msg_error_open_file_access  DB "Error al abrir el archivo de configuracion", 0A, "Programa terminado!", 0A, "$"
-    ; creden_usuario_clave        DB "[credenciales]", 0A, "usuario="pmartin"", 0A, "clave="201700656"", 0A
+    creden_usuario_clave        DB "[credenciales]", "usuario=", 22, "pfrancisco", 22, "clave=", 22, "201700656", 22, 00
+    msg_error_creden            DB "Error de autenticacion", 0A, "Programa terminado!", 0A, "$"
+    temp_buffer                 DB 040 DUP(0), "$"
     handle_file                 DW ?
+    buffer_file                 DB 040 DUP(0), "$"
     buffer_teclado              DB 20, 00
                                 DB 100h DUP(?)
-    buffer_file                 DB 0FF DUP("$")
 
 ;segmento de codigo
 .code
@@ -72,24 +74,56 @@ acceso_sistema:
     mov CX, 0FF
     mov AH, 03F
     int 21
-        
+    ;Mostrar el contenido leído
+    ; mov DX, offset buffer_file
+    ; mov AH, 09
+    ; int 21h
+
     ; Cerrar el archivo
     mov BX, [handle_file]
     mov AH, 3E
     int 21h
-    int 03
+
+    mov SI, offset buffer_file 
+    mov DI, offset temp_buffer 
+
+limpiar_cadena:
+    mov AL, [SI]
+    cmp AL, 20h ; Comparar con un espacio
+    je saltar_caracter
+    cmp AL, 0A ; Comparar con un salto de línea
+    je saltar_caracter
+    cmp AL, 024 ;fin de buffer de archivo
+    je parsear_credenciales
+    mov [DI], AL ; Copiar el carácter al buffer de destino
+    inc DI
+
+saltar_caracter:
+    inc SI
+    jmp limpiar_cadena
 
 ;parsear las credenciales si son correctas
 parsear_credenciales:
-    mov CX, 00
-    mov DX, 00
+    mov DI, offset creden_usuario_clave
+    mov SI, offset temp_buffer
+    mov CX, 34 ;contador para decrementar el loop size total de la cadena a comparar
 
-
-
-
-
+comparar_cadenas:
+    mov AL, [SI] 
+    mov BL, [DI]   
+    cmp AL, BL 
+    jne datos_invalidos ; Salto si los bytes son diferentes
+    inc SI 
+    inc DI 
+    loop comparar_cadenas 
+    ; Las cadenas son iguales
     jmp menu_loop
 
+datos_invalidos:
+    mov DX, offset msg_error_creden
+    mov AH, 09
+    int 21
+    jmp fin
 
 error_abrir_archivo:
     mov DX, offset msg_error_open_file_access
