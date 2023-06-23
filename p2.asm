@@ -24,12 +24,15 @@
     msg2                        DB "Opcion incorrecto, intenta de nuevo!", 0A, "$"
     file_acces                  DB "PRA2.CNF",00
     msg_error_open_file_access  DB "Error al abrir el archivo de configuracion", 0A, "Programa terminado!", 0A, "$"
+    msg_error_create_file_base    DB 0A,0A, "Error al crear el archivo de productos!", 0A, "$"
     creden_usuario_clave        DB "[credenciales]", "usuario=", 22, "pfrancisco", 22, "clave=", 22, "201700656", 22, 00
     msg_error_creden            DB "Error de autenticacion", 0A, "Programa terminado!", 0A, "$"
     msg_correcto_cred           DB "Credenciales correctas!", 0A, "Presione Enter para continuar: $"
-    msg_escape_menu_principal   DB "(Escape) Menu Principal", 0A, "$"
+    msg_escape_menu_principal   DB "(Esc) Volver a Menu Principal", 0A, "$"
+    file_product                DB "PROD.BIN", 00
     temp_buffer                 DB 040 DUP(0), "$"
     handle_file                 DW ?
+    handle_file_prod            DW ?
     buffer_file                 DB 040 DUP(0), "$"
     buffer_teclado              DB 20, 00
                                 DB 100h DUP(?)
@@ -126,7 +129,6 @@ credenciales_correctas:
     int 21
 
     cmp AL, 0D ;Enter
-    int 03
     je menu_loop
     jmp credenciales_correctas
 
@@ -243,6 +245,16 @@ productos:
     mov AH, 09
     int 21
 
+    ;abrir archivo de productos
+    mov AL, 02 ;archivo lectura escritura
+    mov DX, offset file_product
+    mov AH, 3D
+    int 21
+    int 03
+    ;mensaje de error del archivo
+    jc crear_archivo ;  se crea el archivo si no existe
+    mov [handle_file_prod], AX ;abdle no cambia
+
     ;leer opcion de usuario
     mov AH, 07
     int 21
@@ -256,6 +268,21 @@ productos:
     cmp AL, 1B ;escape
     je menu_loop
     jmp productos
+
+crear_archivo:
+    mov DX, offset file_product
+    mov CX, 00
+    mov AH, 3C
+    int 21
+    jc error_crear_archivo
+    jmp productos
+
+error_crear_archivo:
+    mov DX, offset msg_error_create_file_base
+    mov AH, 09
+    int 21
+    
+    jmp menu_loop
 
 fin:
 .EXIT
