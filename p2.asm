@@ -25,6 +25,7 @@
     msg_error_open_file_access  DB "Error al abrir el archivo de configuracion", 0A, "Programa terminado!", 0A, "$"
     creden_usuario_clave        DB "[credenciales]", "usuario=", 22, "pfrancisco", 22, "clave=", 22, "201700656", 22, 00
     msg_error_creden            DB "Error de autenticacion", 0A, "Programa terminado!", 0A, "$"
+    msg_correcto_cred           DB "Credenciales correctas!", 0A, "Presione Enter para continuar: $"
     temp_buffer                 DB 040 DUP(0), "$"
     handle_file                 DW ?
     buffer_file                 DB 040 DUP(0), "$"
@@ -74,12 +75,7 @@ acceso_sistema:
     mov CX, 0FF
     mov AH, 03F
     int 21
-    ;Mostrar el contenido leído
-    ; mov DX, offset buffer_file
-    ; mov AH, 09
-    ; int 21h
-
-    ; Cerrar el archivo
+    ;cierro el buffer
     mov BX, [handle_file]
     mov AH, 3E
     int 21h
@@ -117,7 +113,21 @@ comparar_cadenas:
     inc DI 
     loop comparar_cadenas 
     ; Las cadenas son iguales
-    jmp menu_loop
+    jmp credenciales_correctas
+
+credenciales_correctas:
+    mov DX, offset msg_correcto_cred
+    mov AH, 09
+    int 21
+    ;leer opcion de usuario
+    mov AH, 07 ;sin echo
+    int 21
+
+    cmp AL, 0D ;Enter
+    int 03
+    je menu_loop
+    jmp credenciales_correctas
+
 
 datos_invalidos:
     mov DX, offset msg_error_creden
