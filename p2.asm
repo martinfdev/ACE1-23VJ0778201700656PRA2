@@ -11,7 +11,8 @@
     nombre                      DB "Pedro Martin Francisco", 0A, "$"
     carne                       DB "201700656", 0A, "$"
     salto                       DB 0A, "$" ;salto a siguente linea
-    opciones_m                  DB "=======OPCIONES=======", 0A, "$"
+    opciones_m                  DB "=======OPCIONES MENU=======", 0A, "$"
+    opciones_producto           DB "====+OPCIONES PRODUCTO+====", 0A, "$"
     productos_m                 DB "(p) Productos", 0A, "$"
     ingreso_prod_m              DB "(i) Ingresar Productos", 0A, "$"
     eliminar_prod_m             DB "(e) Eliminar Productos", 0A, "$"
@@ -26,6 +27,7 @@
     creden_usuario_clave        DB "[credenciales]", "usuario=", 22, "pfrancisco", 22, "clave=", 22, "201700656", 22, 00
     msg_error_creden            DB "Error de autenticacion", 0A, "Programa terminado!", 0A, "$"
     msg_correcto_cred           DB "Credenciales correctas!", 0A, "Presione Enter para continuar: $"
+    msg_escape_menu_principal   DB "(Escape) Menu Principal", 0A, "$"
     temp_buffer                 DB 040 DUP(0), "$"
     handle_file                 DW ?
     buffer_file                 DB 040 DUP(0), "$"
@@ -159,21 +161,6 @@ menu_loop:
     mov AH, 09
     int 21
 
-    ;ingreso productos
-    mov DX, offset ingreso_prod_m
-    mov AH, 09
-    int 21
-
-    ;eliminar productos
-    mov DX, offset eliminar_prod_m
-    mov AH, 09
-    int 21
-
-    ;ver productos
-    mov DX, offset ver_prod_m
-    mov AH, 09
-    int 21
-
     ;ventas
     mov DX, offset Ventas_m
     mov AH, 09
@@ -199,14 +186,8 @@ menu_loop:
     int 21
 
     cmp AL, 070 ;p
-    ;je teclado_correcto
-    cmp AL, 069 ;i
-    ;je teclado_correcto
-    cmp AL, 065 ;e
-    ;je teclado_correcto
+    je productos
     cmp AL, 062 ;b
-    ;je teclado_correcto
-    cmp AL, 076 ;v
     ;je teclado_correcto
     cmp AL, 068 ;h
     ;je teclado_correcto
@@ -224,6 +205,58 @@ opcion_incorrecta:
     mov AH, 09
     int 21
     jmp menu_loop
+
+productos:
+    ;salto antes de imprimir
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+
+    mov DX, offset opciones_producto
+    mov AH, 09
+    int 21
+
+    ;ingreso productos
+    mov DX, offset ingreso_prod_m
+    mov AH, 09
+    int 21
+
+    ;eliminar productos
+    mov DX, offset eliminar_prod_m
+    mov AH, 09
+    int 21
+    
+    ;ver productos
+    mov DX, offset ver_prod_m
+    mov AH, 09
+    int 21
+    ;tecla escape para el menu principal
+    mov DX, offset msg_escape_menu_principal
+    mov AH, 09
+    int 21
+    
+    ;solicitar una opcion al usuario
+    mov DX, offset promt_m
+    mov AH, 09
+    int 21
+
+    ;leer opcion de usuario
+    mov AH, 07
+    int 21
+
+    cmp AL, 069 ;i
+    ;je teclado_correcto
+    cmp AL, 065 ;e
+    ;je teclado_correcto
+    cmp AL, 076 ;v
+    ;je teclado_correcto
+    cmp AL, 1B ;escape
+    je menu_loop
+    jmp productos
+
 fin:
 .EXIT
 END    
