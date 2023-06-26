@@ -22,7 +22,7 @@
     salir_m                     DB "(s) Salir", 0A, "$"
     promt_m                     DB "Seleccione una opcion: $"
     msg2                        DB "Opcion incorrecto, intenta de nuevo!", 0A, "$"
-    file_acces                  DB "PRA2.CNF",00
+    file_acces                  DB 'PRA2.CNF',00
     msg_error_open_file_access  DB "Error al abrir el archivo de configuracion", 0A, "Programa terminado!", 0A, "$"
     msg_error_create_file_base  DB 0A,0A, "Error al crear el archivo de productos!", 0A, "$"
     creden_usuario_clave        DB "[credenciales]", "usuario=", 22, "pfrancisco", 22, "clave=", 22, "201700656", 22, 00
@@ -30,21 +30,22 @@
     msg_correcto_cred           DB "Credenciales correctas!", 0A, "Presione Enter para continuar: $"
     msg_escape_menu_principal   DB "(Esc) Volver a Menu Principal", 0A, "$"
     msg_codigo_invalido         DB 0A, "Codigo invalido! $"
+    msg_descrip_invalido        DB 0A, "Descripcion invalido! $"
     file_product                DB "PROD.BIN", 00
     temp_buffer                 DB 040 DUP(0)
     handle_file                 DW ?
     handle_file_prod            DW ?
     buffer_file                 DB 060 DUP(0)
-    buffer_teclado              DB 20, 00
+    buffer_teclado              DB 25, 00
                                 DB 21 DUP(0)
     prod_codigo_name            DB 0A, "Codigo: $"
     prod_descrip_name           DB 0A, "Descripcion: $"
     prod_precio_name            DB 0A, "Precio: $"
     prod_unidades_name         	DB 0A, "Unidades: $"
-    buff_prod_codigo            DB 04 (0)
-    buff_prod_descrip           DB 40 (0)
-    buff_prod_precio            DB 01(0)
-    buff_prod_unidades         	DB 01(0)
+    buff_prod_codigo            DB 05 DUP (0)
+    buff_prod_descrip           DB 21 DUP (0)
+    buff_prod_precio            DB 01 DUP (0)
+    buff_prod_unidades         	DB 01 DUP (0)
 
 ;segmento de codigo
 .code
@@ -373,13 +374,111 @@ ciclo_copiar_codigo:
     mov AL, [SI]
     mov [DI], AL
     inc SI
+    inc DI
     loop ciclo_copiar_codigo
+pedir_descrip:
+    mov DX, offset prod_descrip_name
+    mov AH,09
+    int 21
+    ;entrada en teclado!
+    mov DX, offset buffer_teclado
+    mov AH, 0A
+    int 21
+    ;comprobar la cantidad de caracteres >= 32 = hex 20+1 
+    mov DI, offset buffer_teclado
+    inc DI
+    mov AL, [DI]
+    cmp AL, 00 ;buffer es igual cero volver a pedir
+    je pedir_descrip
+    cmp AL, 21
+    jb validar_caracteres_descrip ;tamanio aceptado
+    jmp pedir_descrip
+;validar caracteres aceptados en descripcion
+validar_caracteres_descrip:
+    mov SI, offset buffer_teclado
+    inc SI
+    mov CH, 00
+    mov CL, [SI] ;copiar cantidad de cadenas en el buffer teclado
+    inc SI ;incrementar SI para poscionarse a la primera cadena a validar
 
+validar_cadena_descrip:
+    mov AL, [SI]
+    cmp AL, 41 ; 'A'
+    jb validar_numeros_descrip ;caracteres menores a A para buscar numeros
+    cmp AL, 5B ; '['
+    je print_caracter_invalido_descrip
+    cmp AL, 5C ; '\'
+    je print_caracter_invalido_descrip
+    cmp AL, 5D ; ']'
+    je print_caracter_invalido_descrip
+    cmp AL, 5E ; '^'
+    je print_caracter_invalido_descrip
+    cmp AL, 5F ; '_'
+    je print_caracter_invalido_descrip
+    cmp AL, 60 ; '`'
+    je print_caracter_invalido_descrip
+    cmp AL, 7A ; 'z'
+    ja print_caracter_invalido_descrip ;saltar msg caracter invalido mayor que z
+    jmp siguiente_caracter_descrip
 
+validar_numeros_descrip:
+    cmp AL, 2C ; ','
+    je siguiente_caracter_descrip
+    cmp AL, 2E ; '.'
+    je siguiente_caracter_descrip
+    cmp AL, 21 ; '!'
+    je siguiente_caracter_descrip
+    cmp AL, 30 ;'0'
+    je siguiente_caracter_descrip
+    cmp AL, 31 ;'1'
+    je siguiente_caracter_descrip
+    cmp AL, 32 ;'2'
+    je siguiente_caracter_descrip
+    cmp AL, 33 ;'3'
+    je siguiente_caracter_descrip
+    cmp AL, 34 ;'4'
+    je siguiente_caracter_descrip
+    cmp AL, 35 ;'5'
+    je siguiente_caracter_descrip
+    cmp AL, 36 ;'6'
+    je siguiente_caracter_descrip
+    cmp AL, 37 ;'7'
+    je siguiente_caracter_descrip
+    cmp AL, 38 ;'8'
+    je siguiente_caracter_descrip
+    cmp AL, 39 ;'9'
+    je siguiente_caracter_descrip
+    cmp AL, 41 ;'A'
+    ja validar_cadena_descrip
+    jmp print_caracter_invalido_descrip
 
+siguiente_caracter_descrip:
+    inc SI
+    loop validar_cadena_descrip
+    jmp copiar_a_buf_descrip ;temporal
 
+print_caracter_invalido_descrip:
+    mov DX, offset msg_descrip_invalido
+    mov AH, 09
+    int 21
+    jmp pedir_descrip
 
-
+copiar_a_buf_descrip:
+    mov DI, offset buff_prod_descrip
+    mov SI, offset buffer_teclado
+    inc SI
+    mov CH, 00
+    mov CL, [SI]
+    inc SI
+    mov AH, 00
+     int 03
+    jmp ciclo_copiar_descrip    
+ciclo_copiar_descrip:
+    mov AL, [SI]
+    mov [DI], AL
+    inc SI
+    inc DI
+    loop ciclo_copiar_descrip   
     ; mov DX, offset prod_descrip_name
     ; mov AH,09
     ; int 21    
