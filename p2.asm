@@ -29,8 +29,10 @@
     msg_error_creden            DB "Error de autenticacion", 0A, "Programa terminado!", 0A, "$"
     msg_correcto_cred           DB "Credenciales correctas!", 0A, "Presione Enter para continuar: $"
     msg_escape_menu_principal   DB "(Esc) Volver a Menu Principal", 0A, "$"
-    msg_codigo_invalido         DB 0A, "Codigo invalido! $"
-    msg_descrip_invalido        DB 0A, "Descripcion invalido! $"
+    msg_codigo_invalido         DB 0A, "Ingrese un codigo valido! $"
+    msg_descrip_invalido        DB 0A, "Ingrese una descripcion valida! $"
+    msg_numero_cant_invalido    DB 0A, "Ingrese un precio valido!: $"
+    msg_numero_unid_invalido    DB 0A, "Ingrese unidades validas!: $"
     file_product                DB "PROD.BIN", 00
     temp_buffer                 DB 040 DUP(0)
     handle_file                 DW ?
@@ -44,8 +46,8 @@
     prod_unidades_name         	DB 0A, "Unidades: $"
     buff_prod_codigo            DB 05 DUP (0)
     buff_prod_descrip           DB 21 DUP (0)
-    buff_prod_precio            DB 01 DUP (0)
-    buff_prod_unidades         	DB 01 DUP (0)
+    buff_prod_precio            DB 02 DUP (0)
+    buff_prod_unidades         	DB 02 DUP (0)
 
 ;segmento de codigo
 .code
@@ -471,30 +473,126 @@ copiar_a_buf_descrip:
     mov CL, [SI]
     inc SI
     mov AH, 00
-     int 03
     jmp ciclo_copiar_descrip    
 ciclo_copiar_descrip:
     mov AL, [SI]
     mov [DI], AL
     inc SI
     inc DI
-    loop ciclo_copiar_descrip   
-    ; mov DX, offset prod_descrip_name
-    ; mov AH,09
-    ; int 21    
-    ; mov DX, offset prod_precio_name
-    ; mov AH,09
-    ; int 21
-    ; mov DX, offset prod_unidades_name
-    ; mov AH,09
-    ; int 21    
+    loop ciclo_copiar_descrip
+    jmp pedir_precio
+
+pedir_precio:    
+    mov DX, offset prod_precio_name
+    mov AH,09
+    int 21
+    ;entrada en teclado!
+    mov DX, offset buffer_teclado
+    mov AH, 0A
+    int 21
+    ;comprobar la cantidad de caracteres >= 2 = hex 02
+    mov DI, offset buffer_teclado
+    inc DI
+    mov AL, [DI]
+    cmp AL, 00 ;buffer es igual cero volver a pedir
+    je pedir_precio
+    cmp AL, 03
+    jb salto_es_numero_precio ;tamanio aceptado
+    jmp pedir_precio
+; procedimeinto para verificar is es numero
+es_numero PROC
+    push SI
+    push AX
+    mov SI, offset buffer_teclado
+    inc SI
+    mov CH, 00
+    mov CL, [SI] ; copiar cantidad de cadenas en el buffer teclado
+    inc SI ; incrementar SI para poscionarse a la primera cadena a validar
+    validar_es_numero:
+        mov AL, [SI] 
+        cmp AL, 30 
+        jb error_numero_invalido ; menor a '0', inválido
+        cmp AL, 39 
+        ja error_numero_invalido ; mayor a '9', inválido
+        inc SI ; avanzar al siguiente carácter
+        loop validar_es_numero ; repetir hasta que CX llegue a cero
+    pop AX
+    pop SI
+    ret
+es_numero ENDP
+
+error_numero_invalido:
+    cmp BX, 0000
+    je print_cantidad_invalida
+    cmp BX, 0001
+    je print_unidades_invalida
+
+print_cantidad_invalida:
+    mov DX, offset msg_numero_cant_invalido
+    mov AH, 09
+    int 21
+    jmp pedir_precio
+
+salto_es_numero_precio:
+    mov BX, 0000 ;bandera para saber si el proc lo llama precio o cantidad
+    call es_numero
+    call convertir_a_numero
+    ;copiar cantidad a buffer de cantidad que esta en el registro AX
+    mov DI, offset buff_prod_precio
+    mov [DI], AX
+    jmp pedir_unidades
+
+convertir_a_numero PROC
+    mov SI, offset buffer_teclado
+    inc SI
+    mov CL, [SI] ; Cargar la cantidad de caracteres en CL
+    inc SI
+    mov AX, 00
+    mov BX, 00
+    convertir_loop:
+        mov BL, [SI] ; Cargar el carácter actual en BL
+        sub BL, 30
+        mov DX, 00A
+        mul DX 
+        mov BH, 00
+        add AX, BX ; Sumar el resultado de la multiplicación al acumulador
+        inc SI ; Avanzar al siguiente carácter
+        loop convertir_loop ; Repetir hasta que CL llegue a cero
+    ret
+convertir_a_numero ENDP
+
+pedir_unidades:
+    mov DX, offset prod_unidades_name
+    mov AH,09
+    int 21    
+    ;entrada en teclado!
+    mov DX, offset buffer_teclado
+    mov AH, 0A
+    int 21
+    ;comprobar la cantidad de caracteres >= 2 = hex 02
+    mov DI, offset buffer_teclado
+    inc DI
+    mov AL, [DI]
+    cmp AL, 00 ;buffer es igual cero volver a pedir
+    je pedir_unidades
+    cmp AL, 03
+    jb salto_es_numero_unidades ;tamanio aceptado
+    jmp pedir_unidades   
+
+print_unidades_invalida:
+    mov DX, offset msg_numero_unid_invalido
+    mov AH, 9
+    int 21
+    jmp pedir_unidades
+
+salto_es_numero_unidades:
+    mov BX, 0001
+    call es_numero    
+    call convertir_a_numero ;devuelve el numero en el registro AX
+    mov DI, offset buff_prod_unidades
+    mov [DI], AX
+    int 03
     jmp productos
-; pedir_codigo:
-;     mov 
-    
-
-
 fin:
 .EXIT
-END    
-
+END
