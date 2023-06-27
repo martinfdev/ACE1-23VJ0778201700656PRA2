@@ -33,10 +33,11 @@
     msg_descrip_invalido        DB 0A, "Ingrese una descripcion valida! $"
     msg_numero_cant_invalido    DB 0A, "Ingrese un precio valido!: $"
     msg_numero_unid_invalido    DB 0A, "Ingrese unidades validas!: $"
+    msg_error_escribir_archivo  DB 0A, "Error al escribir el archivo!$"
     file_product                DB "PROD.BIN", 00
     temp_buffer                 DB 040 DUP(0)
-    handle_file                 DW ?
-    handle_file_prod            DW ?
+    handle_file                 DW 0000
+    handle_file_prod            DW 0000
     buffer_file                 DB 060 DUP(0)
     buffer_teclado              DB 25, 00
                                 DB 21 DUP(0)
@@ -48,6 +49,8 @@
     buff_prod_descrip           DB 21 DUP (0)
     buff_prod_precio            DB 02 DUP (0)
     buff_prod_unidades         	DB 02 DUP (0)
+    num_price               	DW 0000
+    num_units                   DW 0000
 
 ;segmento de codigo
 .code
@@ -257,15 +260,6 @@ productos:
     mov AH, 09
     int 21
 
-    ;abrir archivo de productos
-    mov AL, 02 ;archivo lectura escritura
-    mov DX, offset file_product
-    mov AH, 3D
-    int 21
-    ;mensaje de error del archivo
-    jc crear_archivo ;  se crea el archivo si no existe
-    mov [handle_file_prod], AX ;handle cuando se crea o se habre el archivo 
-
     ;leer opcion de usuario
     mov AH, 07
     int 21
@@ -279,20 +273,6 @@ productos:
     cmp AL, 1B ;escape
     je menu_loop
     jmp productos
-
-crear_archivo:
-    mov DX, offset file_product
-    mov CX, 00
-    mov AH, 3C
-    int 21
-    jc error_crear_archivo
-    jmp productos
-
-error_crear_archivo:
-    mov DX, offset msg_error_create_file_base
-    mov AH, 09
-    int 21
-    jmp menu_loop
 
 crear_producto:
     mov DX, offset salto
@@ -538,7 +518,7 @@ salto_es_numero_precio:
     call es_numero
     call convertir_a_numero
     ;copiar cantidad a buffer de cantidad que esta en el registro AX
-    mov DI, offset buff_prod_precio
+    mov DI, offset num_price
     mov [DI], AX
     jmp pedir_unidades
 
@@ -589,10 +569,53 @@ salto_es_numero_unidades:
     mov BX, 0001
     call es_numero    
     call convertir_a_numero ;devuelve el numero en el registro AX
-    mov DI, offset buff_prod_unidades
+    mov DI, offset num_units
     mov [DI], AX
-    int 03
+    jmp escribir_prods_en_archivo
+
+escribir_prods_en_archivo:
+    ;; probar abrirlo normal
+    mov AL, 02
+	mov AH, 3D
+	mov DX, offset file_product
+	int 21
+	;; si no lo cremos
+	jc  crear_archivo_prod
+	;; si abre escribimos
+	jmp guardar_handle_prod
+crear_archivo_prod:
+	mov CX, 0000
+	mov DX, offset file_product
+	mov AH, 3C
+	int 21
+	;; archivo abierto
+guardar_handle_prod:
+	;; guardamos handle
+	mov [handle_file_prod], AX
+	;; obtener handle
+	mov BX, [handle_file_prod]
+	;; vamos al final del archivo
+	mov CX, 00
+	mov DX, 00
+	mov AL, 02
+	mov AH, 42
+	int 21
+	;; escribir el producto en el archivo
+	;; escribí los dos primeros campos
+	mov CX, 26
+	mov DX, offset buff_prod_codigo
+	mov AH, 40
+	int 21
+	;; escribo los otros dos
+	mov CX, 0004
+	mov DX, offset num_price
+	mov AH, 40
+	int 21
+	;; cerrar archivo
+	mov AH, 3E
+	int 21
     jmp productos
+    
 fin:
 .EXIT
 END
