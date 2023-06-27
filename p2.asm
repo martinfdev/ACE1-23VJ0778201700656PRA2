@@ -16,7 +16,7 @@
     productos_m                 DB "(p) Productos", 0A, "$"
     ingreso_prod_m              DB "(c) Crear Producto", 0A, "$"
     eliminar_prod_m             DB "(e) Eliminar Producto", 0A, "$"
-    ver_prod_m                  DB "(b) Ver Productos", 0A, "$"
+    ver_prod_m                  DB "(v) Ver Productos", 0A, "$"
     ventas_m                    DB "(v) Ventas", 0A, "$"
     herramientas_m              DB "(h) Herramientas", 0A, "$"
     salir_m                     DB "(s) Salir", 0A, "$"
@@ -52,8 +52,13 @@
     num_price               	DW 0000
     num_units                   DW 0000
     puntero_temp                DW 0000
-    cod_prod_temp               db 05 dup (0)
+    cod_prod_temp               DB 05 dup (0)
     ceros                   	DB 2B dup(0)
+    buff_tmp_prod_codigo        DB 05 DUP (0), "$"
+    buff_tmp_prod_descrip       DB 21 DUP (0), "$"
+    op_mostrar_continuar        DB 0A, "(Enter) Continuar $"
+    op_mostrar_salir            DB 0A, "(q) Salir $"
+    esperando_op_mostrar        DB 0A, "Ingrese una opcion: $"
 ;segmento de codigo
 .code
 .STARTUP
@@ -161,6 +166,8 @@ error_abrir_archivo:
     mov AH, 09
     int 21
     cmp BX, 0000 ;lo estoy mandando de leer archivo de productos.bin para eliminar
+    je productos
+    cmp BX, 0001 ;lo estoy mandando desde mostrar productos
     je productos
     jmp fin
 
@@ -273,7 +280,7 @@ productos:
     cmp AL, 065 ;e
     je eliminar_producto_de_archivo
     cmp AL, 076 ;v
-    ;je teclado_correcto
+    je mostrar_productos
     cmp AL, 1B ;escape
     je menu_loop
     jmp productos
@@ -688,7 +695,7 @@ ciclo_encontrar_codigo_eliminar:
     ;verificar si es producto valido
     mov AL, 00
     cmp [buff_prod_codigo], AL
-    je finalizar_borrar
+    je ciclo_encontrar_codigo_eliminar
     mov SI, offset buffer_teclado
     mov CH, 00
     mov CL, [SI+1]
@@ -735,6 +742,92 @@ borrar_encontrado:
 	int 21
     jmp productos
 
+mostrar_productos:
+    mov DX, 0000
+    mov [puntero_temp], DX
+    mov AL, 02
+    mov DX, offset file_product
+    mov AH, 3D
+    int 21
+    mov BX, 0001
+    jc error_abrir_archivo
+    mov [handle_file_prod], AX   
+    mov SI, 0000
+    
+ciclo_mostrar_producto:
+    inc SI
+    mov BX, [handle_file_prod]
+    mov CX, 05
+    mov DX, offset buff_tmp_prod_codigo
+    mov AH, 3F
+    int 21
+    mov BX, [handle_file_prod]
+    mov CX, 21
+    mov DX, offset buff_tmp_prod_descrip
+    mov AH, 3F
+    int 21
+    mov BX, [handle_file_prod]
+    mov CX, 04
+    mov DX, offset num_price
+    mov AH, 3F
+    int 21
+    cmp AX, 0000 ;fin de lectura en el archivo
+    je finalizar_borrar; se utilizar finalizar borrar por regrese el mismo menu y cierra el archivo
+    call mostrar_producto_op_productos
+    mov DX, [puntero_temp]
+    add DX, 2A
+    mov [puntero_temp], DX
+    cmp SI, 0005
+    je opcion_de_usuario
+    jmp ciclo_mostrar_producto
+
+opcion_de_usuario:
+    mov SI, 0000
+    push AX
+    push DX
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+    mov DX, offset op_mostrar_continuar
+    mov AH, 09
+    int 21
+    mov DX, offset op_mostrar_salir
+    mov AH, 09
+    int 21
+    mov DX, offset esperando_op_mostrar
+    mov AH, 09
+    int 21
+    ;leer opcion de usuario
+    mov AH, 07
+    int 21
+    cmp AL, 71
+    je productos
+    cmp AL, 0D
+    je ciclo_mostrar_producto
+    pop DX
+    pop AX
+
+mostrar_producto_op_productos:
+    push AX
+    push DX
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+    mov DX, offset prod_codigo_name
+    mov AH, 09
+    int 21 
+    mov DX, offset buff_tmp_prod_codigo
+    mov AH, 09
+    int 21
+    mov DX, offset prod_descrip_name
+    mov AH, 09
+    int 21
+    mov DX, offset buff_tmp_prod_descrip
+    mov AH, 09
+    int 21
+    pop DX
+    pop AX 
+    ret
 
 fin:
 .EXIT
