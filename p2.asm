@@ -51,7 +51,9 @@
     buff_prod_unidades         	DB 02 DUP (0)
     num_price               	DW 0000
     num_units                   DW 0000
-
+    puntero_temp                DW 0000
+    cod_prod_temp               db 05 dup (0)
+    ceros                   	DB 2B dup(0)
 ;segmento de codigo
 .code
 .STARTUP
@@ -158,6 +160,8 @@ error_abrir_archivo:
     mov DX, offset msg_error_open_file_access
     mov AH, 09
     int 21
+    cmp BX, 0000 ;lo estoy mandando de leer archivo de productos.bin para eliminar
+    je productos
     jmp fin
 
 menu_loop:
@@ -267,7 +271,7 @@ productos:
     cmp AL, 063 ;c
     je crear_producto
     cmp AL, 065 ;e
-    ;je teclado_correcto
+    je eliminar_producto_de_archivo
     cmp AL, 076 ;v
     ;je teclado_correcto
     cmp AL, 1B ;escape
@@ -615,7 +619,123 @@ guardar_handle_prod:
 	mov AH, 3E
 	int 21
     jmp productos
-    
+
+eliminar_producto_de_archivo:
+    mov DX, 0000
+	mov [puntero_temp], DX
+
+pedir_codigo_eliminar:
+    mov DX, offset prod_codigo_name
+	mov AH, 09
+	int 21
+	mov DX, offset buffer_teclado
+	mov AH, 0A
+	int 21
+	;;
+	mov DI, offset buffer_teclado
+	inc DI
+	mov AL, [DI]
+	cmp AL, 00
+	je  pedir_codigo_eliminar
+	cmp AL, 05
+	jb  aceptar_tam_cod_eliminar  
+	mov DX, offset salto
+	mov AH, 09
+	int 21
+	jmp pedir_codigo_eliminar
+
+aceptar_tam_cod_eliminar:
+    mov DI, offset cod_prod_temp
+	mov SI, offset buffer_teclado
+	inc SI
+	mov CH, 00
+	mov CL, [SI]
+	inc SI;  posicion en el contenido del buffer
+ciclo_copiar_codigo_eliminar:
+    mov AL, [SI]
+    mov [DI], AL
+    inc SI
+    inc DI
+    loop ciclo_copiar_codigo_eliminar
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+
+    mov AL, 02
+    mov DX, offset file_product
+    mov AH, 3D
+    int 21
+    mov BX, 0000
+    jc error_abrir_archivo
+    mov [handle_file_prod], AX
+
+ciclo_encontrar_codigo_eliminar:
+    mov BX, [handle_file_prod]
+    mov CX, 26
+    mov DX, offset buff_prod_codigo
+    mov AH, 3F
+    int 21
+    mov BX, [handle_file_prod]
+    mov CX, 04
+    mov DX, offset num_price
+    mov AH, 3F
+    int 21
+    cmp AX, 0000 ;fin de lectura en el archivo
+    je finalizar_borrar
+    mov DX, [puntero_temp]
+    add DX, 2A
+    mov [puntero_temp], DX
+    ;verificar si es producto valido
+    mov AL, 00
+    cmp [buff_prod_codigo], AL
+    je finalizar_borrar
+    mov SI, offset buffer_teclado
+    mov CH, 00
+    mov CL, [SI+1]
+    mov SI, offset cod_prod_temp
+    mov DI, offset buff_prod_codigo 
+    call comparar_cadenas_proc
+    cmp DL, 0FF
+    je borrar_encontrado
+    jmp ciclo_encontrar_codigo_eliminar
+
+comparar_cadenas_proc PROC
+    ciclo_cadenas_iguales:
+        mov AL, [SI]
+        cmp [DI], AL
+        jne no_son_iguales
+        inc SI
+        inc DI
+        loop ciclo_cadenas_iguales
+        mov DL, 0FF ; son iguales
+        ret
+    no_son_iguales:
+        mov DL, 00
+        ret
+comparar_cadenas_proc ENDP    
+
+finalizar_borrar:
+    mov BX, [handle_file_prod]
+	mov AH, 3E
+	int 21
+    jmp productos
+
+borrar_encontrado:
+    mov DX, [puntero_temp]
+	sub DX, 2A
+	mov CX, 0000
+	mov BX, [handle_file_prod]
+	mov AL, 00
+	mov AH, 42
+	int 21
+	;;; puntero posicionado
+	mov CX, 2A
+	mov DX, offset ceros
+	mov AH, 40
+	int 21
+    jmp productos
+
+
 fin:
 .EXIT
 END
