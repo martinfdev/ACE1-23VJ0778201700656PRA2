@@ -67,8 +67,12 @@
     msg_no_existe_producto      DB 0A, "El producto no existe!$"
     msg_insuficiente_cantidad   DB 0A, "Cantidad de producto insuficiente!$"
     fin_venta_palabra           DB "fin"
-    buff_tmp_guardar_ventas     DB 2A0 dup(0)
+    contador_de_items           DW 0000
     numero_ascii                DB 05 dup (30), "$"
+    msg_terminar_venta          DB 0A, "Items maximos 10 "
+                                DB 0A, "(Enter) Continuar comprando"   
+                                DB 0A, "(f) Menu principal "
+                                DB 0A, "Esperando opcion: $"
 ;segmento de codigo
 .code
 .STARTUP
@@ -912,16 +916,16 @@ pedir_codigo_venta:
     mov AH, 0A
     int 21
 
-    ; ;comprobar si es palabra fin
-    ; mov DI, offset fin_venta_palabra
-	; mov SI, offset buffer_teclado
-	; inc SI
-	; mov CH, 00
-	; mov CL, [SI]
-	; inc SI;  posicion en el contenido del buffer
-    ; call comparar_cadenas_proc
-    ; cmp DL, 0FF
-    ; je cerrar_venta ;con la palabra fin se terminal las ventas y escribir en archivo ventas
+    ;comprobar si es palabra fin
+    mov DI, offset fin_venta_palabra
+	mov SI, offset buffer_teclado
+	inc SI
+	mov CH, 00
+	mov CL, [SI]
+	inc SI;  posicion en el contenido del buffer
+    call comparar_cadenas_proc
+    cmp DL, 0FF
+    je menu_loop ;con la palabra fin se termina las ventas regreso a menu
 
     ;comprobar la cantidad de caracteres >= 4
     mov DI, offset buffer_teclado
@@ -974,7 +978,7 @@ ciclo_encontrar_codigo_venta:
     mov AH, 3F
     int 21
     cmp AX, 0000 ;fin de lectura en el archivo
-    je finalizar_venta ;cerrar el archivo msg que no existe el codigo de producto
+    je no_producto_venta ;cerrar el archivo msg que no existe el codigo de producto
     mov DX, [puntero_temp]
     add DX, 2A
     mov [puntero_temp], DX
@@ -1029,7 +1033,6 @@ validar_cantidad_venta:
     mov DI, offset num_units
     mov CX, [DI]
     sub CX, AX ;restamos del inventario la venta
-    int 03
     mov [DI], CX ;volvemos copiar las unidades a la memoria
     call modificar_encontrado_venta
 hacer_venta:
@@ -1042,6 +1045,7 @@ hacer_venta:
     
     call numero_a_cadena 
     call mostrar_subtotales
+    call aumentar_contador_ventas
     jmp pedir_codigo_venta
 
 ;modificar_archivo_prod.bin con nuevas cantidades
@@ -1077,6 +1081,39 @@ modificar_encontrado_venta:
     pop AX
     ret
 
+aumentar_contador_ventas:
+    push SI
+    push BX
+    mov BX, 0000
+    mov SI, offset contador_de_items
+    mov BX, [SI]
+    inc BX
+    mov [SI], BX
+    cmp BX, 000A
+    je opciones_terminar_venta
+    pop BX
+    pop SI
+ret
+
+opciones_terminar_venta:
+    mov DX, offset msg_terminar_venta
+    mov AH, 09
+    int 21
+    ;leer opcion de usuario
+    mov AH, 07
+    int 21
+
+    cmp AL, 0D ;Enter
+    je limpiar_contador
+    cmp AL, 66 ;f
+    je menu_loop
+    jmp opciones_terminar_venta
+
+limpiar_contador:
+    mov BX, 0000
+    mov [contador_de_items], BX    
+    jmp pedir_codigo_venta
+
 mostrar_subtotales:
     mov DX, offset salto
     mov AH, 09
@@ -1098,7 +1135,7 @@ producto_insuficiente:
     int 21
     jmp pedir_cantidad_venta
 
-finalizar_venta:
+no_producto_venta:
     mov DX, offset msg_no_existe_producto
     mov AH, 09
     int 21
@@ -1141,6 +1178,7 @@ numero_a_cadena PROC
     ret
 numero_a_cadena ENDP
 
+escribir_ventas_en_archivo:
 
 
 
