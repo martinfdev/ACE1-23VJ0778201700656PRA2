@@ -52,7 +52,7 @@
     buff_prod_unidades         	DB 02 DUP (0)
     num_price               	DW 0000
     num_units                   DW 0000
-    tmp_num_units               DW 0000
+    tmp_num_units               DB 00
     msg_sub_totales             DB 0A, "Subtotal: $"
     tmp_total_ventas            DW 0000
     puntero_temp                DW 0000
@@ -63,7 +63,7 @@
     op_mostrar_continuar        DB 0A, "(Enter) Continuar $"
     op_mostrar_salir            DB 0A, "(q) Salir $"
     esperando_op_mostrar        DB 0A, "Ingrese una opcion: $"
-    archivo_ventas              DB "VENTAS.BIN", 00
+    file_ventas                 DB "VENTAS.BIN", 00
     msg_no_existe_producto      DB 0A, "El producto no existe!$"
     msg_insuficiente_cantidad   DB 0A, "Cantidad de producto insuficiente!$"
     fin_venta_palabra           DB "fin"
@@ -73,6 +73,14 @@
                                 DB 0A, "(Enter) Continuar comprando"   
                                 DB 0A, "(f) Menu principal "
                                 DB 0A, "Esperando opcion: $"
+    handle_file_ventas          DW 0000
+    dia                         DB 00
+    mes                         DB 00
+    ano                         DW 00
+    hora                        DB 00
+    minuto                      DB 00
+    final                       DB "$"
+    ; segundos                    DB 00
 ;segmento de codigo
 .code
 .STARTUP
@@ -1046,6 +1054,7 @@ hacer_venta:
     call numero_a_cadena 
     call mostrar_subtotales
     call aumentar_contador_ventas
+    call escribir_ventas_en_archivo
     jmp pedir_codigo_venta
 
 ;modificar_archivo_prod.bin con nuevas cantidades
@@ -1179,10 +1188,77 @@ numero_a_cadena PROC
 numero_a_cadena ENDP
 
 escribir_ventas_en_archivo:
+ ;; probar abrirlo normal
+    mov AL, 02
+	mov AH, 3D
+	mov DX, offset file_ventas
+	int 21
+	;; si no lo cremos
+	jc  crear_archivo_ventas
+	;; si abre escribimos
+	jmp guardar_handle_ventas  
+crear_archivo_ventas:
+    mov CX, 0000
+	mov DX, offset file_ventas
+	mov AH, 3C
+	int 21
+	;; archivo abierto
+guardar_handle_ventas:
+    ;; guardamos handle
+	mov [handle_file_ventas], AX
+	;; obtener handle
+	mov BX, [handle_file_ventas]
+	;; vamos al final del archivo
+	mov CX, 00
+	mov DX, 00
+	mov AL, 02
+	mov AH, 42
+	int 21
+    ;obtener la fecha
+    call get_curret_date
+    ;obtener la hora
+    call get_current_time
+    ;escribir datos de fecha y hora
+    mov CX, 06
+    mov DX, offset dia
+    mov AH, 40
+    int 21
+    ;escribir el codigo
+    mov CX, 05
+    mov DX, offset buff_prod_codigo
+    mov AH, 40
+	int 21
+	;; escribir el numeros de unidades
+	mov CX, 02
+	mov DX, offset tmp_num_units
+	mov AH, 40
+	int 21
+    int 03
+	;; cerrar archivo
+	mov AH, 3E
+	int 21
+    ret
 
-
-
-
+get_curret_date:
+   mov CX, 0000
+   mov DX, 0000
+   mov AH, 2A
+   int 21
+   mov [dia], DL
+   mov [mes], DH
+   mov [ano], CX
+   int 03
+   ret
+get_current_time:
+    mov DX, 0000
+    mov CX, 0000
+    mov AH, 2C
+    int 21
+    mov [hora], CH
+    mov [minuto], CL
+    ; mov [segundos], DL
+    int 03
+    ret
 
 fin:
 .EXIT
