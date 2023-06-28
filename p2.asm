@@ -13,6 +13,7 @@
     salto                       DB 0A, "$" ;salto a siguente linea
     opciones_m                  DB "=======OPCIONES MENU=======", 0A, "$"
     opciones_producto           DB "====+OPCIONES PRODUCTO+====", 0A, "$"
+    titulo_ventas               DB 0A,0A, "====+Ventas+====", "$"
     productos_m                 DB "(p) Productos", 0A, "$"
     ingreso_prod_m              DB "(c) Crear Producto", 0A, "$"
     eliminar_prod_m             DB "(e) Eliminar Producto", 0A, "$"
@@ -51,6 +52,9 @@
     buff_prod_unidades         	DB 02 DUP (0)
     num_price               	DW 0000
     num_units                   DW 0000
+    tmp_num_units               DW 0000
+    msg_sub_totales             DB 0A, "Subtotal: $"
+    tmp_total_ventas            DW 0000
     puntero_temp                DW 0000
     cod_prod_temp               DB 05 dup (0)
     ceros                   	DB 2B dup(0)
@@ -59,6 +63,12 @@
     op_mostrar_continuar        DB 0A, "(Enter) Continuar $"
     op_mostrar_salir            DB 0A, "(q) Salir $"
     esperando_op_mostrar        DB 0A, "Ingrese una opcion: $"
+    archivo_ventas              DB "VENTAS.BIN", 00
+    msg_no_existe_producto      DB 0A, "El producto no existe!$"
+    msg_insuficiente_cantidad   DB 0A, "Cantidad de producto insuficiente!$"
+    fin_venta_palabra           DB "fin"
+    buff_tmp_guardar_ventas     DB 2A0 dup(0)
+    numero_ascii                DB 05 dup (30), "$"
 ;segmento de codigo
 .code
 .STARTUP
@@ -215,8 +225,8 @@ menu_loop:
 
     cmp AL, 070 ;p
     je productos
-    cmp AL, 062 ;b
-    ;je teclado_correcto
+    cmp AL, 076 ;v
+    je ventas
     cmp AL, 068 ;h
     ;je teclado_correcto
     cmp AL, 073 ;s
@@ -513,10 +523,12 @@ es_numero PROC
 es_numero ENDP
 
 error_numero_invalido:
-    cmp BX, 0000
+    cmp BX, 0000; se llamo cuando se pide precio crear producto
     je print_cantidad_invalida
-    cmp BX, 0001
+    cmp BX, 0001 ; se llamo cuando se pide cantidad crear producto
     je print_unidades_invalida
+    cmp BX, 0002 ; se llama cuando se pide cantidad en ventas
+    je pedir_cantidad_venta
 
 print_cantidad_invalida:
     mov DX, offset msg_numero_cant_invalido
@@ -652,6 +664,9 @@ pedir_codigo_eliminar:
 	jmp pedir_codigo_eliminar
 
 aceptar_tam_cod_eliminar:
+    call validar_campo_codigo
+    cmp BX, 0001
+    je pedir_codigo_eliminar
     mov DI, offset cod_prod_temp
 	mov SI, offset buffer_teclado
 	inc SI
@@ -828,6 +843,308 @@ mostrar_producto_op_productos:
     pop DX
     pop AX 
     ret
+
+validar_campo_codigo PROC
+    mov SI, offset buffer_teclado
+    inc SI
+    mov CH, 00
+    mov CL, [SI] ;copiar cantidad de cadenas en el buffer teclado
+    inc SI ;incrementar SI para poscionarse a la primera cadena a validar
+
+    ;validar los caracteres [A-Z0-9]
+    validar_letras_codigo:
+    mov AL, [SI]
+    cmp AL, 41 ; 'A'
+    jb validar_numeros ;caracteres menores a A para buscar numeros
+    cmp AL, 5A ; 'Z'
+    ja print_codigo_invalido ;saltar msg caracter invalido mayor que Z
+    jmp siguiente_caracter
+
+    validar_numeros:
+        cmp AL, 30 ;'0'
+        jb  print_codigo_invalido
+        cmp AL, 3A ;':'
+        je  print_codigo_invalido
+        cmp AL, 3B ;';'
+        je  print_codigo_invalido
+        cmp AL, 3C ;'<'
+        je  print_codigo_invalido
+        cmp AL, 3D ;'='
+        je  print_codigo_invalido
+        cmp AL, 3E ;'>'
+        je  print_codigo_invalido
+        cmp AL, 3F ;'?'
+        je  print_codigo_invalido
+        cmp AL, 40 ;'@'
+        je  print_codigo_invalido
+        cmp AL, 41 ;'A'
+        ja validar_letras_codigo
+        jmp siguiente_caracter
+
+    siguiente_caracter:
+        inc SI
+        loop validar_letras_codigo
+        mov BX, 0000; validacion existosa
+        ret 
+
+    print_codigo_invalido:
+        mov BX, 0001; el codigo es invalido
+        mov DX, offset msg_codigo_invalido
+        mov AH, 09
+        int 21
+        ret
+ret
+validar_campo_codigo ENDP
+
+ventas:
+    mov DX, offset titulo_ventas
+    mov AH, 09
+    int 21
+    
+pedir_codigo_venta:
+    mov DX, 0000
+	mov [puntero_temp], DX
+    mov DX, offset prod_codigo_name
+    mov AH, 09
+    int 21
+    ;entrada en teclado!
+    mov DX, offset buffer_teclado
+    mov AH, 0A
+    int 21
+
+    ; ;comprobar si es palabra fin
+    ; mov DI, offset fin_venta_palabra
+	; mov SI, offset buffer_teclado
+	; inc SI
+	; mov CH, 00
+	; mov CL, [SI]
+	; inc SI;  posicion en el contenido del buffer
+    ; call comparar_cadenas_proc
+    ; cmp DL, 0FF
+    ; je cerrar_venta ;con la palabra fin se terminal las ventas y escribir en archivo ventas
+
+    ;comprobar la cantidad de caracteres >= 4
+    mov DI, offset buffer_teclado
+    inc DI
+    mov AL, [DI]
+    cmp AL, 00 ;buffer es igual cero volver a pedir
+    je pedir_codigo_venta
+    cmp AL, 05
+    jb validar_codigo_venta ;condigo aceptado
+    jmp pedir_codigo_venta
+
+validar_codigo_venta:
+    call validar_campo_codigo
+    cmp BX, 0001
+    je pedir_codigo_venta
+    mov DI, offset cod_prod_temp
+	mov SI, offset buffer_teclado
+	inc SI
+	mov CH, 00
+	mov CL, [SI]
+	inc SI;  posicion en el contenido del buffer
+    
+ciclo_copiar_producto_venta:
+    mov AL, [SI]
+    mov [DI], AL
+    inc SI
+    inc DI
+    loop ciclo_copiar_producto_venta
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+
+    mov AL, 02
+    mov DX, offset file_product
+    mov AH, 3D
+    int 21
+    mov BX, 0000
+    jc error_abrir_archivo
+    mov [handle_file_prod], AX   
+         
+ciclo_encontrar_codigo_venta:
+    mov BX, [handle_file_prod]
+    mov CX, 26
+    mov DX, offset buff_prod_codigo
+    mov AH, 3F
+    int 21
+    mov BX, [handle_file_prod]
+    mov CX, 04
+    mov DX, offset num_price
+    mov AH, 3F
+    int 21
+    cmp AX, 0000 ;fin de lectura en el archivo
+    je finalizar_venta ;cerrar el archivo msg que no existe el codigo de producto
+    mov DX, [puntero_temp]
+    add DX, 2A
+    mov [puntero_temp], DX
+    ;verificar si es producto valido
+    mov AL, 00
+    cmp [buff_prod_codigo], AL
+    je ciclo_encontrar_codigo_venta
+    mov SI, offset buffer_teclado
+    mov CH, 00
+    mov CL, 04
+    mov SI, offset cod_prod_temp
+    mov DI, offset buff_prod_codigo
+    call comparar_cadenas_proc
+    cmp DL, 0FF
+    je pedir_cantidad_venta
+    jmp ciclo_encontrar_codigo_venta
+
+pedir_cantidad_venta:
+    mov DX, offset prod_unidades_name
+    mov AH, 09
+    int 21
+    ;entrada en teclado!
+    mov DX, offset buffer_teclado
+    mov AH, 0A
+    int 21
+    ;comprobar la cantidad de caracteres >= 02
+    mov DI, offset buffer_teclado
+    inc DI
+    mov AL, [DI]
+    cmp AL, 00 ;buffer es igual cero volver a pedir
+    je pedir_cantidad_venta
+    cmp AL, 03
+    jb validar_cantidad_venta ;condigo aceptado
+    jmp pedir_cantidad_venta
+
+validar_cantidad_venta:
+    mov BX, 0002
+    call es_numero
+    call convertir_a_numero
+    ;guarder el valor numerico en ya convertido obtenido de teclado
+    mov DI, offset tmp_num_units
+    mov [DI], AX
+    ;obtener el valor de unidades en inventario
+    mov DI, offset num_units
+    mov CX, [DI]
+    ;obtener el precio en invetario sistema
+    mov DI, offset num_price
+    mov BX, [DI]
+    ;comparar unidades si es suficiente`
+    cmp AX, CX
+    ja producto_insuficiente ;mayor que la cantidad en inventario es error
+    mov DI, offset num_units
+    mov CX, [DI]
+    sub CX, AX ;restamos del inventario la venta
+    int 03
+    mov [DI], CX ;volvemos copiar las unidades a la memoria
+    call modificar_encontrado_venta
+hacer_venta:
+    mul BX ;multiplicacion de la cantidad por el precio
+    mov DI, offset tmp_total_ventas
+    mov DX, [DI] ;obtener el subtotal que se lleva hasta ahora
+    add DX, AX  ;sumar la nuev cantidad
+    mov [DI], DX ;guardar en memoria el subtotal
+    mov AX, DX ;mover el valor de DX a AX para mostrar el subtotal
+    
+    call numero_a_cadena 
+    call mostrar_subtotales
+    jmp pedir_codigo_venta
+
+;modificar_archivo_prod.bin con nuevas cantidades
+modificar_encontrado_venta:
+    push AX
+    push BX
+    push CX
+    push DX
+
+    mov DX, [puntero_temp]
+	sub DX, 2A
+	mov CX, 0000
+	mov BX, [handle_file_prod]
+	mov AL, 00
+	mov AH, 42
+	int 21
+	;;; puntero posicionado
+	mov CX, 26
+	mov DX, offset buff_prod_codigo
+	mov AH, 40
+	int 21
+    mov CX, 0004
+	mov DX, offset num_price
+	mov AH, 40
+	int 21
+    ;cerrar el archivo
+    mov BX, [handle_file_prod]
+	mov AH, 3E
+	int 21
+    pop DX
+    pop CX
+    pop BX
+    pop AX
+    ret
+
+mostrar_subtotales:
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+    mov DX, offset msg_sub_totales
+    mov AH, 09
+    int 21
+    mov DX, offset numero_ascii
+    mov AH, 09
+    int 21
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+    ret
+
+producto_insuficiente:
+    mov DX, offset msg_insuficiente_cantidad
+    mov AH, 09
+    int 21
+    jmp pedir_cantidad_venta
+
+finalizar_venta:
+    mov DX, offset msg_no_existe_producto
+    mov AH, 09
+    int 21
+    jmp ventas  
+
+numero_a_cadena PROC
+    mov CX, 0005
+	mov DI, offset numero_ascii
+    ciclo_poner30s:
+		mov BL, 30
+		mov [DI], BL
+		inc DI
+		loop ciclo_poner30s
+		;; tenemos '0' en toda la cadena
+		mov CX, AX    ; inicializar contador
+		mov DI, offset numero_ascii
+		add DI, 0004
+		;;
+    ciclo_convertirAcadena:
+            mov BL, [DI]
+            inc BL
+            mov [DI], BL
+            cmp BL, 3a
+            je aumentar_siguiente_digito_primera_vez
+            loop ciclo_convertirAcadena
+            ret
+    aumentar_siguiente_digito_primera_vez:
+            push DI
+    aumentar_siguiente_digito:
+            mov BL, 30     ; poner en '0' el actual
+            mov [DI], BL
+            dec DI         ; puntero a la cadena
+            mov BL, [DI]
+            inc BL
+            mov [DI], BL
+            cmp BL, 3a
+            je aumentar_siguiente_digito
+            pop DI         ; se recupera DI
+            loop ciclo_convertirAcadena
+    ret
+numero_a_cadena ENDP
+
+
+
+
+
 
 fin:
 .EXIT
