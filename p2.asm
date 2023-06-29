@@ -14,6 +14,7 @@
     opciones_m                  DB "=======OPCIONES MENU=======", 0A, "$"
     opciones_producto           DB "====+OPCIONES PRODUCTO+====", 0A, "$"
     titulo_ventas               DB 0A,0A, "====+Ventas+====", "$"
+    titulo_herramientas         DB 0A,0A, "====+HERRAMIENTAS+====", "$"
     productos_m                 DB "(p) Productos", 0A, "$"
     ingreso_prod_m              DB "(c) Crear Producto", 0A, "$"
     eliminar_prod_m             DB "(e) Eliminar Producto", 0A, "$"
@@ -79,8 +80,24 @@
     ano                         DW 00
     hora                        DB 00
     minuto                      DB 00
-    final                       DB "$"
     ; segundos                    DB 00
+    op_genera_catalogo          DB 0A, "(g) Generar Catalogo Completo$"
+    op_report_alfa              DB 0A, "(r) Reporte Alfabetico de productos$"
+    op_rep_ventas               DB 0A, "(v) Reporte Ventas$"
+    op_rep_producto_sin_existe  DB 0A, "(n) Reporte de productos sin existencia$"
+    file_catalog_htm            DB "CATALG.HTM", 00
+    handle_catalog_htm          DW 0000
+    encabezado_html             DB "<html><body>"
+    tam_inicializacion_tabla    DB 3e
+    inicializacion_tabla        DB '<table border="1"><tr><td>codigo</td><td>descripcion</td></tr>'
+    tam_cierre_tabla            DB 8
+    cierre_tabla                DB "</table>"
+    tam_footer_html             DB 0e
+    footer_html                 DB "</body></html>"
+    td_html                     DB "<td>"
+    tdc_html                    DB "</td>"
+    tr_html                     DB "<tr>"
+    trc_html                    DB "</tr>"
 ;segmento de codigo
 .code
 .STARTUP
@@ -240,7 +257,7 @@ menu_loop:
     cmp AL, 076 ;v
     je ventas
     cmp AL, 068 ;h
-    ;je teclado_correcto
+    je herramientas
     cmp AL, 073 ;s
     je fin
     jmp opcion_incorrecta
@@ -1102,7 +1119,7 @@ aumentar_contador_ventas:
     je opciones_terminar_venta
     pop BX
     pop SI
-ret
+    ret
 
 opciones_terminar_venta:
     mov DX, offset msg_terminar_venta
@@ -1233,7 +1250,6 @@ guardar_handle_ventas:
 	mov DX, offset tmp_num_units
 	mov AH, 40
 	int 21
-    int 03
 	;; cerrar archivo
 	mov AH, 3E
 	int 21
@@ -1247,7 +1263,6 @@ get_curret_date:
    mov [dia], DL
    mov [mes], DH
    mov [ano], CX
-   int 03
    ret
 get_current_time:
     mov DX, 0000
@@ -1257,8 +1272,206 @@ get_current_time:
     mov [hora], CH
     mov [minuto], CL
     ; mov [segundos], DL
-    int 03
     ret
+
+herramientas:
+    mov DX, offset titulo_herramientas
+    mov AH, 09
+    int 21
+    mov DX, offset op_genera_catalogo
+    mov AH, 09
+    int 21
+    mov DX, offset op_report_alfa
+    mov AH, 09
+    int 21
+    mov DX, offset op_rep_ventas
+    mov AH, 09
+    int 21
+    mov DX, offset op_rep_producto_sin_existe
+    mov AH, 09
+    int 21
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+    mov DX, offset msg_escape_menu_principal
+    mov AH, 09
+    int 21    
+    mov DX, offset salto
+    mov AH, 09
+    int 21
+    mov DX, offset promt_m
+    mov AH, 09
+    int 21
+
+    ;esperando opciones
+    mov AH, 07
+    int 21
+    cmp AL, 1B
+    je menu_loop
+    cmp AL, 67
+    je generar_catalogo_completo
+    jmp herramientas
+
+generar_catalogo_completo:
+    ;crear el archivo CATALG.HTM"
+    mov CX, 0000
+    mov DX, offset file_catalog_htm
+    mov AH, 3C
+    int 21
+    ;guardamos el handle
+    mov [handle_catalog_htm], AX
+    ; obtener el handle
+    mov BX, [handle_catalog_htm]
+    ;escribimos siempre al final der archivo
+	mov CX, 00
+	mov DX, 00
+	mov AL, 02
+	mov AH, 42
+	int 21
+    ;escribimos el encabezado
+    mov CX, 0C
+    mov DX, offset encabezado_html
+    mov AH, 40
+    int 21
+    ;inicializacion de tabla
+    mov CX, 3E
+    mov DX, offset inicializacion_tabla
+    mov AH, 40
+    int 21
+
+    ;abrir el contenido del archivo productos
+    mov AL, 02
+	mov AH, 3D
+	mov DX, offset file_product
+	int 21
+    ;;
+	mov [handle_file_prod], AX
+
+ciclo_escribir_tablas:
+   ;; puntero cierta posición
+	mov BX, [handle_file_prod]
+	mov CX, 26     ;; leer 26h bytes
+	mov DX, offset buff_prod_codigo
+	mov AH, 3F
+	int 21
+	;; puntero avanzó
+	mov BX, [handle_file_prod]
+	mov CX, 0004
+	mov DX, offset num_price
+	mov AH, 3F
+	int 21
+	;; ¿cuántos bytes leímos?
+	;; si se leyeron 0 bytes entonces se terminó el archivo...
+	cmp AX, 00
+	je fin_escribir_tablas
+	;; ver si es producto válido
+	mov AL, 00
+	cmp [buff_prod_codigo], AL
+	je ciclo_escribir_tablas
+	;; producto en estructura
+	call imprimir_estructura_html
+	jmp ciclo_escribir_tablas
+
+imprimir_estructura_html:
+	mov BX, [handle_catalog_htm]
+	mov AH, 40
+	mov CH, 00
+	mov CL, 04
+	mov DX, offset tr_html
+	int 21
+	;;
+	mov BX, [handle_catalog_htm]
+	mov AH, 40
+	mov CH, 00
+	mov CL, 04
+	mov DX, offset td_html
+	int 21
+	;;
+	mov DX, offset buff_prod_codigo
+	mov SI, 0000
+ciclo_escribir_codigo:
+	mov DI, DX
+	mov AL, [DI]
+	cmp AL, 00
+	je escribir_desc
+	cmp SI, 0006
+	je escribir_desc
+	mov CX, 0001
+	mov BX, [handle_catalog_htm]
+	mov AH, 40
+	int 21
+	inc DX
+	inc SI
+	jmp ciclo_escribir_codigo
+escribir_desc:
+	;;
+	mov BX, [handle_catalog_htm]
+	mov AH, 40
+	mov CH, 00
+	mov CL, 05
+	mov DX, offset tdc_html
+	int 21
+	;;
+	mov BX, [handle_catalog_htm]
+	mov AH, 40
+	mov CH, 00
+	mov CL, 04
+	mov DX, offset td_html
+	int 21
+	;;
+	mov DX, offset buff_prod_descrip
+	mov SI, 0000
+ciclo_escribir_desc:
+	mov DI, DX
+	mov AL, [DI]
+	cmp AL, 00
+	je cerrar_tags
+	cmp SI, 0026
+	je cerrar_tags
+	mov CX, 0001
+	mov BX, [handle_catalog_htm]
+	mov AH, 40
+	int 21
+	inc DX
+	inc SI
+	jmp ciclo_escribir_desc
+	;;
+cerrar_tags:
+	mov BX, [handle_catalog_htm]
+	mov AH, 40
+	mov CH, 00
+	mov CL, 05
+	mov DX, offset tdc_html
+	int 21
+	;;
+	mov BX, [handle_catalog_htm]
+	mov AH, 40
+	mov CH, 00
+	mov CL, 05
+	mov DX, offset trc_html
+	int 21
+		;;
+	ret
+
+fin_escribir_tablas:
+    mov CX, 08
+    mov DX, offset cierre_tabla
+    mov AH, 40
+    int 21
+
+    ;cerramos las etiquetas
+    mov CX, 0E
+    mov DX, offset footer_html
+    mov AH, 40
+    int 21
+   
+    ;cerramos el archivo
+    mov BX, [handle_catalog_htm]
+	mov AH, 3E
+	int 21
+    jmp herramientas
+
+
 
 fin:
 .EXIT
