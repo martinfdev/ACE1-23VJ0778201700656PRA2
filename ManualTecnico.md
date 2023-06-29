@@ -1,4 +1,4 @@
-# Manual de Tecnico
+# Manual Tecnico
 
 ## Sobre los requisitos del software
 
