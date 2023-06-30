@@ -106,7 +106,8 @@
     nueva_linea_report_venta    DB 0A
     slash_venta                 DB 2F
     dos_puntos                  DB 3A
-    hora_report_venta           DB "Hora: ", ;06 
+    hora_report_venta           DB "Hora: " ;06 
+    monto_rep                   DB "Monto: " ;07
 ;segmento de codigo
 .code
 .STARTUP
@@ -1349,7 +1350,8 @@ generar_catalogo_completo:
     mov AH, 40
     int 21
     ;inicializacion de tabla
-    call escribir_fecha_sistema
+    call escribir_fecha_generado
+
 
     mov CX, 3E
     mov DX, offset inicializacion_tabla
@@ -1490,7 +1492,7 @@ reporte_ventas:
     ;genera la fecha
     call get_curret_date
     call get_current_time
-    ;crear el archivo CATALG.HTM"
+    ;crear el archivo REP.TXT"
     mov CX, 0000
     mov DX, offset file_rep_ventas
     mov AH, 3C
@@ -1506,8 +1508,8 @@ reporte_ventas:
 	mov AH, 42
 	int 21
     
-    ;escribir encabezado fecha
-    call escribir_fecha_sistema
+    ;escribir fecha existente en variables
+    call escribir_fecha_generado
 
     ;escribimos linea doble
     mov CX, 21
@@ -1515,26 +1517,10 @@ reporte_ventas:
     mov AH, 40
     int 21
 
-    ;escribmos linea simple
-    mov CX, 21
-    mov DX, offset linea_simple_rep_ventas
-    mov AH, 40
-    int 21
-    ;abrir el contenido del archivo productos
-    ; mov AL, 02
-	; mov AH, 3D
-	; mov DX, offset file_product
-	; int 21
-	; mov [handle_rep_txt], AX
-    
-    ;cerramos el archivo
-    mov BX, [handle_rep_txt]
-	mov AH, 3E
-	int 21
-    jmp herramientas
+    call generar_contenido_rep_ventas
 
-escribir_fecha_sistema:
-       ;escribimos el encabezado
+escribir_fecha_generado:
+    ;escribimos el encabezado
     mov CX, 07
     mov DX, offset fecha_report_venta
     mov AH, 40
@@ -1656,10 +1642,92 @@ dospuntos_separador_fecha:
     mov AH, 40
     int 21
     ret
+escribir_linea_simple:
+    mov CX, 21
+    mov DX, offset linea_simple_rep_ventas
+    mov AH, 40
+    int 21
+    ret
 
+generar_contenido_rep_ventas:
+    ;abrir el contenido del archivo productos
+    mov AL, 02
+	mov AH, 3D
+	mov DX, offset file_ventas
+	int 21
+    ;;
+	mov [handle_file_ventas], AX
+    mov SI, 0000
+ciclo_escribir_ventas:
+    inc SI
+    ;obtenemos el nombre del producto
+    ;; puntero cierta posición
+	mov BX, [handle_file_ventas]
+	mov CX, 06     ;; leer 26h bytes
+	mov DX, offset dia
+	mov AH, 3F
+	int 21
+	;; puntero avanzó
+	mov BX, [handle_file_ventas]
+	mov CX, 0005
+	mov DX, offset buff_prod_codigo
+	mov AH, 3F
+	int 21
+    ;; puntero avanzó
+	mov BX, [handle_file_ventas]
+	mov CX, 02
+	mov DX, offset tmp_num_units
+	mov AH, 3F
+	int 21
+	;; ¿cuántos bytes leímos?
+    int 03
+	;; si se leyeron 0 bytes entonces se terminó el archivo...
+	cmp AX, 00
+	je fin_escribir_ventas
+	;; ver si es producto válido
+    mov AL, 00
+	cmp [tmp_num_units], AL
+	je fin_escribir_ventas
+    cmp SI, 005
+	je fin_escribir_ventas
+	call escribir_producto_reporte_venta
+    jmp ciclo_escribir_ventas
 
+escribir_producto_reporte_venta:
+    mov BX, [handle_rep_txt]
+    ;escribimos siempre al final der archivo
+	mov CX, 00
+	mov DX, 00
+	mov AL, 02
+	mov AH, 42
+	int 21
+    call escribir_fecha_generado
+    ;escribir titulo monto
+    mov CX, 07
+    mov DX, offset monto_rep
+    mov AH, 40
+    int 21
+    ;convertir el precion en numero
+    push BX
+    mov AX, 0000
+    mov AL, [tmp_num_units]
+    call numero_a_cadena
+    pop BX
+    ;-----------------
+    mov CX, 05
+    mov DX, offset numero_ascii
+    mov AH, 40
+    int 21
+    call escribir_nueva_linea
+    call escribir_linea_simple
+    ret
 
-
+fin_escribir_ventas:
+    ;cerramos el archivo
+    mov BX, [handle_rep_txt]
+	mov AH, 3E
+	int 21
+    jmp herramientas
 
 fin:
 .EXIT
