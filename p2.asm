@@ -98,6 +98,15 @@
     tdc_html                    DB "</td>"
     tr_html                     DB "<tr>"
     trc_html                    DB "</tr>"
+    file_rep_ventas             DB "REP.TXT"
+    handle_rep_txt              DW 0000
+    linea_doble_rep_ventas      DB "================================", 0A ;33 bytes ;21H
+    linea_simple_rep_ventas     DB "--------------------------------", 0A ;33 bytes ;21H
+    fecha_report_venta          DB "Fecha: " ;07
+    nueva_linea_report_venta    DB 0A
+    slash_venta                 DB 2F
+    dos_puntos                  DB 3A
+    hora_report_venta           DB "Hora: ", ;06 
 ;segmento de codigo
 .code
 .STARTUP
@@ -1310,9 +1319,13 @@ herramientas:
     je menu_loop
     cmp AL, 67
     je generar_catalogo_completo
+    cmp AL, 76 ;v
+    je reporte_ventas
     jmp herramientas
 
 generar_catalogo_completo:
+    call get_current_time
+    call get_curret_date
     ;crear el archivo CATALG.HTM"
     mov CX, 0000
     mov DX, offset file_catalog_htm
@@ -1328,12 +1341,16 @@ generar_catalogo_completo:
 	mov AL, 02
 	mov AH, 42
 	int 21
+
+
     ;escribimos el encabezado
     mov CX, 0C
     mov DX, offset encabezado_html
     mov AH, 40
     int 21
     ;inicializacion de tabla
+    call escribir_fecha_sistema
+
     mov CX, 3E
     mov DX, offset inicializacion_tabla
     mov AH, 40
@@ -1443,14 +1460,12 @@ cerrar_tags:
 	mov CL, 05
 	mov DX, offset tdc_html
 	int 21
-	;;
 	mov BX, [handle_catalog_htm]
 	mov AH, 40
 	mov CH, 00
 	mov CL, 05
 	mov DX, offset trc_html
 	int 21
-		;;
 	ret
 
 fin_escribir_tablas:
@@ -1470,6 +1485,179 @@ fin_escribir_tablas:
 	mov AH, 3E
 	int 21
     jmp herramientas
+
+reporte_ventas:
+    ;genera la fecha
+    call get_curret_date
+    call get_current_time
+    ;crear el archivo CATALG.HTM"
+    mov CX, 0000
+    mov DX, offset file_rep_ventas
+    mov AH, 3C
+    int 21
+    ;guardamos el handle
+    mov [handle_rep_txt], AX
+    ; obtener el handle
+    mov BX, [handle_rep_txt]
+    ;escribimos siempre al final der archivo
+	mov CX, 00
+	mov DX, 00
+	mov AL, 02
+	mov AH, 42
+	int 21
+    
+    ;escribir encabezado fecha
+    call escribir_fecha_sistema
+
+    ;escribimos linea doble
+    mov CX, 21
+    mov DX, offset linea_doble_rep_ventas
+    mov AH, 40
+    int 21
+
+    ;escribmos linea simple
+    mov CX, 21
+    mov DX, offset linea_simple_rep_ventas
+    mov AH, 40
+    int 21
+    ;abrir el contenido del archivo productos
+    ; mov AL, 02
+	; mov AH, 3D
+	; mov DX, offset file_product
+	; int 21
+	; mov [handle_rep_txt], AX
+    
+    ;cerramos el archivo
+    mov BX, [handle_rep_txt]
+	mov AH, 3E
+	int 21
+    jmp herramientas
+
+escribir_fecha_sistema:
+       ;escribimos el encabezado
+    mov CX, 07
+    mov DX, offset fecha_report_venta
+    mov AH, 40
+    int 21
+    
+    ;escribir dia
+    push BX
+    call generar_fecha_dia
+    pop BX
+    
+    mov CX, 05
+    mov DX, offset numero_ascii
+    mov AH, 40
+    int 21
+
+    call slash_separador_fecha
+    ;escribir mes
+    push BX
+    call generar_fecha_mes
+    pop BX
+    
+    mov CX, 05
+    mov DX, offset numero_ascii
+    mov AH, 40
+    int 21
+
+    call slash_separador_fecha
+    ;escribir anio
+    push BX
+    call generar_fecha_anio
+    pop BX
+    
+    mov CX, 05
+    mov DX, offset numero_ascii
+    mov AH, 40
+    int 21
+    
+    call escribir_nueva_linea
+
+    ;escribir titulo hora
+    mov CX, 06
+    mov DX, offset hora_report_venta
+    mov AH, 40
+    int 21
+
+    ;escribir hora
+    push BX
+    call generar_fecha_hora
+    pop BX
+    
+    mov CX, 05
+    mov DX, offset numero_ascii
+    mov AH, 40
+    int 21
+
+    call dospuntos_separador_fecha
+
+    ;escribir minutos
+    push BX
+    call generar_fecha_minuto
+    pop BX
+    
+    mov CX, 05
+    mov DX, offset numero_ascii
+    mov AH, 40
+    int 21
+
+    call escribir_nueva_linea
+    ret
+
+generar_fecha_dia:
+    ;obtenemos la fecha y la hora
+    mov AX, 0000
+    mov AL, [dia]
+    call numero_a_cadena
+    ret
+generar_fecha_mes:
+    ;obtenemos la fecha y la hora
+    mov AX, 0000
+    mov AL, [mes]
+    call numero_a_cadena
+    ret
+generar_fecha_anio:
+    ;obtenemos la fecha y la hora
+    mov AX, 0000
+    mov AX, [ano]
+    call numero_a_cadena
+    ret
+
+generar_fecha_hora:
+    ;obtenemos la fecha y la hora
+    mov AX, 0000
+    mov AL, [hora]
+    call numero_a_cadena
+    ret
+
+generar_fecha_minuto:
+    ;obtenemos la fecha y la hora
+    mov AX, 0000
+    mov AL, [minuto]
+    call numero_a_cadena
+    ret
+
+escribir_nueva_linea:
+    mov CX, 01
+    mov DX, offset nueva_linea_report_venta
+    mov AH, 40
+    int 21
+    ret
+slash_separador_fecha:
+    mov CX, 01
+    mov DX, offset slash_venta
+    mov AH, 40
+    int 21
+    ret
+dospuntos_separador_fecha:
+    mov CX, 01
+    mov DX, offset dos_puntos
+    mov AH, 40
+    int 21
+    ret
+
+
 
 
 
